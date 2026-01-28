@@ -1,0 +1,86 @@
+[project]
+name = 'automl-catboost-pipeline'
+version = '0.1.0'
+description = 'Universal CatBoost pipeline for bank scoring tasks'
+readme = 'README.md'
+requires-python = '>=3.10'
+dependencies = [
+    'catboost>=1.2',
+    'optuna>=3.0',
+    'pandas>=2.0',
+    'numpy>=1.24',
+    'pyarrow>=14.0',
+    'scikit-learn>=1.3',
+    'matplotlib>=3.7',
+    'seaborn>=0.12',
+    'joblib>=1.3',
+]
+
+[project.optional-dependencies]
+dev = [
+    'pytest>=7.4',
+    'pytest-cov>=4.1',
+    'pytest-mock>=3.11',
+    'ipykernel>=6.25',
+    'jupyter>=1.0',
+    'ruff>=0.4',
+]
+
+[build-system]
+requires = ['setuptools>=61.0']
+build-backend = 'setuptools.build_meta'
+
+[tool.setuptools.packages.find]
+where = ['.']
+include = ['src*']
+
+[tool.pytest.ini_options]
+testpaths = ['tests']
+python_files = ['test_*.py']
+python_functions = ['test_*']
+addopts = '-v --tb=short'
+pythonpath = ['.']
+
+[tool.ruff]
+target-version = 'py310'
+line-length = 100
+src = ['src', 'tests']
+
+[tool.ruff.lint]
+select = [
+    'E',      # pycodestyle errors (PEP8)
+    'W',      # pycodestyle warnings (PEP8)
+    'F',      # pyflakes
+    'I',      # isort
+    'B',      # flake8-bugbear
+    'C4',     # flake8-comprehensions
+    'UP',     # pyupgrade
+]
+ignore = [
+    'E501',   # line too long (handled by formatter)
+    'B008',   # do not perform function calls in argument defaults
+    'B905',   # zip() without strict= (not critical)
+    'C901',   # too complex
+    'W291',   # trailing whitespace
+    'W293',   # blank line contains whitespace
+    'UP007',  # Use X | Y for type unions (prefer Optional for readability)
+    'UP045',  # Use X | None (prefer Optional for readability)
+]
+
+[tool.ruff.lint.per-file-ignores]
+'tests/*' = ['B011']  # allow assert in tests
+
+[tool.ruff.lint.isort]
+known-first-party = ['src']
+
+[tool.coverage.run]
+source = ['src']
+omit = ['tests/*']
+
+[tool.coverage.report]
+exclude_lines = [
+    'pragma: no cover',
+    'def __repr__',
+    'raise NotImplementedError',
+    'if __name__ == .__main__.:',
+]
