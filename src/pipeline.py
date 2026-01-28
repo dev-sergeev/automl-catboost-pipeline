@@ -14,7 +14,7 @@ from src.feature_selection import FeatureSelector
 from src.optimization import OptunaOptimizer
 from src.preprocessing import Preprocessor
 from src.scoring import ArtifactManager, Scorer
-from src.utils import get_logger, set_random_seed
+from src.utils import NoFeaturesRemainingError, get_logger, set_random_seed
 from src.visualization import MetricsPlotter, TimeDynamicsPlotter
 
 
@@ -107,14 +107,24 @@ class CatBoostPipeline:
 
         # 5. Feature selection
         self.logger.info('Step 4: Feature selection...')
-        self.selector.fit(
-            X_train, y_train, X_valid, y_valid,
-            sample_weight=self.sample_weights_,
-            cat_features=cat_features,
-            date_column=self.config.date_column,
-            train_dates=self.split_result_.train[self.config.date_column],
-            valid_dates=self.split_result_.valid[self.config.date_column]
-        )
+        try:
+            self.selector.fit(
+                X_train, y_train, X_valid, y_valid,
+                sample_weight=self.sample_weights_,
+                cat_features=cat_features,
+                date_column=self.config.date_column,
+                train_dates=self.split_result_.train[self.config.date_column],
+                valid_dates=self.split_result_.valid[self.config.date_column]
+            )
+        except NoFeaturesRemainingError as e:
+            # Log the detailed report
+            self.logger.error(e.get_detailed_report())
+            # Re-raise with the detailed report as the message
+            raise NoFeaturesRemainingError(
+                message=e.get_detailed_report(),
+                selection_history=e.selection_history,
+                last_filter=e.last_filter
+            ) from None
 
         selected_features = self.selector.get_selected_features()
         selected_cat_features = [f for f in cat_features if f in selected_features]

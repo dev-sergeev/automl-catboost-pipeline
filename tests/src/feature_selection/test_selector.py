@@ -6,6 +6,7 @@ import pytest
 
 from src.config import FeatureSelectionConfig
 from src.feature_selection import FeatureSelector
+from src.utils import NoFeaturesRemainingError
 
 
 class TestFeatureSelector:
@@ -212,3 +213,87 @@ class TestFeatureSelector:
 
         assert selector.is_fitted_
         assert len(selector.selected_features_) > 0
+
+    def test_no_features_remaining_raises_error(self, sample_target, sample_config):
+        'Test that NoFeaturesRemainingError is raised when all features are removed.'
+        np.random.seed(42)
+        n = 500
+
+        # Create DataFrame where all features have >99% missing values
+        # This should cause MissingFilter to remove all features
+        all_missing_df = pd.DataFrame({
+            'feature_1': np.where(np.random.random(n) > 0.001, np.nan, 1),
+            'feature_2': np.where(np.random.random(n) > 0.001, np.nan, 2),
+            'feature_3': np.where(np.random.random(n) > 0.001, np.nan, 3),
+        })
+
+        train_idx = int(n * 0.7)
+
+        X_train = all_missing_df.iloc[:train_idx]
+        y_train = sample_target.iloc[:train_idx]
+        X_valid = all_missing_df.iloc[train_idx:]
+        y_valid = sample_target.iloc[train_idx:]
+
+        # Use strict missing threshold so all features get removed
+        selection_config = FeatureSelectionConfig(
+            run_missing_filter=True,
+            run_variance_filter=False,
+            run_correlation_filter=False,
+            run_psi_filter=False,
+            run_importance_filter=False,
+            missing_threshold=0.5  # 50% - all our features have ~99.9% missing
+        )
+
+        selector = FeatureSelector(sample_config, selection_config)
+
+        with pytest.raises(NoFeaturesRemainingError) as exc_info:
+            selector.fit(X_train, y_train, X_valid, y_valid)
+
+        # Check exception contains useful information
+        assert exc_info.value.last_filter == 'MissingFilter'
+        assert len(exc_info.value.selection_history) > 0
+        assert 'MissingFilter' in exc_info.value.get_detailed_report()
+        assert 'Recommendations' in exc_info.value.get_detailed_report()
+
+    def test_no_features_remaining_has_selection_history(self, sample_target, sample_config):
+        'Test that NoFeaturesRemainingError contains selection history.'
+        np.random.seed(42)
+        n = 500
+
+        # Create DataFrame where features pass MissingFilter but fail VarianceFilter
+        zero_variance_df = pd.DataFrame({
+            'const_1': np.ones(n),  # zero variance
+            'const_2': np.ones(n) * 5,  # zero variance
+        })
+
+        train_idx = int(n * 0.7)
+
+        X_train = zero_variance_df.iloc[:train_idx]
+        y_train = sample_target.iloc[:train_idx]
+        X_valid = zero_variance_df.iloc[train_idx:]
+        y_valid = sample_target.iloc[train_idx:]
+
+        selection_config = FeatureSelectionConfig(
+            run_missing_filter=True,  # Will pass (no missing values)
+            run_variance_filter=True,  # Will remove all (zero variance)
+            run_correlation_filter=False,
+            run_psi_filter=False,
+            run_importance_filter=False,
+        )
+
+        selector = FeatureSelector(sample_config, selection_config)
+
+        with pytest.raises(NoFeaturesRemainingError) as exc_info:
+            selector.fit(X_train, y_train, X_valid, y_valid)
+
+        # MissingFilter should have run and passed features
+        # VarianceFilter should be the one that removed all
+        assert exc_info.value.last_filter == 'VarianceFilter'
+
+        # Check history shows the progression
+        history = exc_info.value.selection_history
+        assert len(history) == 2  # MissingFilter + VarianceFilter
+        assert history[0]['step'] == 'MissingFilter'
+        assert history[0]['remaining'] == 2  # Features passed missing filter
+        assert history[1]['step'] == 'VarianceFilter'
+        assert history[1]['remaining'] == 0  # All removed

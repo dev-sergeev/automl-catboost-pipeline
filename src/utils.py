@@ -7,6 +7,66 @@ from typing import Optional
 import numpy as np
 
 
+class NoFeaturesRemainingError(Exception):
+    '''
+    Raised when feature selection removes all features.
+
+    Contains details about which filters removed features and recommendations
+    for resolving the issue.
+    '''
+
+    def __init__(
+        self,
+        message: str,
+        selection_history: list[dict],
+        last_filter: str
+    ):
+        self.selection_history = selection_history
+        self.last_filter = last_filter
+        super().__init__(message)
+
+    def get_detailed_report(self) -> str:
+        'Generate a detailed report of feature removal.'
+        lines = [
+            '',
+            '=' * 70,
+            'FEATURE SELECTION FAILED: No features passed quality thresholds',
+            '=' * 70,
+            '',
+            'Selection history:',
+        ]
+
+        for step in self.selection_history:
+            step_name = step['step']
+            removed = step['removed']
+            remaining = step['remaining']
+            lines.append(f'  {step_name}: removed {removed}, remaining {remaining}')
+
+        lines.extend([
+            '',
+            f'All features were removed at step: {self.last_filter}',
+            '',
+            'Recommendations:',
+            '  1. Review your data quality - features may have too many missing values',
+            '  2. Adjust thresholds in FeatureSelectionConfig:',
+            '     - missing_threshold: increase if too many features removed by MissingFilter',
+            '     - variance_threshold: decrease if VarianceFilter removes too many',
+            '     - correlation_threshold: decrease if CorrelationFilter removes too many',
+            '     - psi_threshold: increase if PSI filters remove too many',
+            '  3. Disable specific filters that are too aggressive:',
+            '     - run_missing_filter=False',
+            '     - run_variance_filter=False',
+            '     - run_correlation_filter=False',
+            '     - run_psi_filter=False',
+            '     - run_psi_time_filter=False',
+            '     - run_importance_filter=False',
+            '  4. Check the selection_history_ attribute for detailed removal info',
+            '',
+            '=' * 70,
+        ])
+        return '\n'.join(lines)
+
+
 def setup_logging(
     level: int = logging.INFO,
     format_str: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

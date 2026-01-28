@@ -7,6 +7,7 @@ import pytest
 from src.config import FeatureSelectionConfig, PipelineConfig
 from src.pipeline import CatBoostPipeline
 from src.scoring import Scorer
+from src.utils import NoFeaturesRemainingError
 
 
 class TestCatBoostPipeline:
@@ -192,3 +193,54 @@ class TestCatBoostPipeline:
         assert len(train_clients & oos_clients) == 0
         assert len(train_clients & oot_clients) == 0
         assert len(valid_clients & oos_clients) == 0
+
+    def test_no_features_remaining_raises_clear_error(self, random_seed, tmp_artifacts_dir):
+        'Test that a clear error is raised when all features are removed.'
+        np.random.seed(random_seed)
+        n = 1000
+
+        # Create DataFrame with only poor quality features
+        # All features will have 99%+ missing values
+        dates = pd.date_range('2024-01-01', periods=60, freq='D')
+        df = pd.DataFrame({
+            'client_id': np.arange(n),
+            'app_id': np.arange(n),
+            'report_date': np.random.choice(dates, n),
+            'target': np.random.randint(0, 2, n),
+            # Features with almost all missing values
+            'feature_1': np.where(np.random.random(n) > 0.001, np.nan, 1),
+            'feature_2': np.where(np.random.random(n) > 0.001, np.nan, 2),
+            'feature_3': np.where(np.random.random(n) > 0.001, np.nan, 3),
+        })
+
+        config = PipelineConfig(
+            id_columns=['client_id', 'app_id'],
+            date_column='report_date',
+            target_column='target',
+            client_column='client_id',
+            random_seed=random_seed,
+            catboost_iterations=10,
+            artifacts_dir=tmp_artifacts_dir
+        )
+
+        # Use strict missing filter that will remove all features
+        selection_config = FeatureSelectionConfig(
+            run_missing_filter=True,
+            run_variance_filter=False,
+            run_correlation_filter=False,
+            run_psi_filter=False,
+            run_psi_time_filter=False,
+            run_importance_filter=False,
+            missing_threshold=0.5  # All features have ~99.9% missing
+        )
+
+        pipeline = CatBoostPipeline(config, selection_config)
+
+        with pytest.raises(NoFeaturesRemainingError) as exc_info:
+            pipeline.fit(df, run_optimization=False, save_artifacts=False)
+
+        # Check that the error message is informative
+        error_message = str(exc_info.value)
+        assert 'FEATURE SELECTION FAILED' in error_message
+        assert 'Recommendations' in error_message
+        assert 'MissingFilter' in error_message

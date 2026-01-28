@@ -14,7 +14,7 @@ from src.feature_selection.missing_filter import MissingFilter
 from src.feature_selection.psi_filter import PSIFilter
 from src.feature_selection.psi_time_filter import PSITimeFilter
 from src.feature_selection.variance_filter import VarianceFilter
-from src.utils import get_logger
+from src.utils import NoFeaturesRemainingError, get_logger
 
 
 class FeatureSelector:
@@ -91,6 +91,7 @@ class FeatureSelector:
             current_features = filter_.get_selected_features()
             self.filters_['missing'] = filter_
             self._log_step('MissingFilter', filter_, current_features)
+            self._check_features_remaining(current_features, 'MissingFilter')
 
         # 2. Variance Filter
         if sc.run_variance_filter:
@@ -100,6 +101,7 @@ class FeatureSelector:
             current_features = filter_.get_selected_features()
             self.filters_['variance'] = filter_
             self._log_step('VarianceFilter', filter_, current_features)
+            self._check_features_remaining(current_features, 'VarianceFilter')
 
         # 3. Correlation Filter
         if sc.run_correlation_filter:
@@ -109,6 +111,7 @@ class FeatureSelector:
             current_features = filter_.get_selected_features()
             self.filters_['correlation'] = filter_
             self._log_step('CorrelationFilter', filter_, current_features)
+            self._check_features_remaining(current_features, 'CorrelationFilter')
 
         # 4. PSI Filter (train vs valid)
         if sc.run_psi_filter:
@@ -122,6 +125,7 @@ class FeatureSelector:
             current_features = filter_.get_selected_features()
             self.filters_['psi'] = filter_
             self._log_step('PSIFilter', filter_, current_features)
+            self._check_features_remaining(current_features, 'PSIFilter')
 
         # 5. PSI Time Filter (stability over time)
         if sc.run_psi_time_filter and date_column and train_dates is not None:
@@ -151,6 +155,7 @@ class FeatureSelector:
             ]
             self.filters_['psi_time'] = filter_
             self._log_step('PSITimeFilter', filter_, current_features)
+            self._check_features_remaining(current_features, 'PSITimeFilter')
 
         # 6. Importance Filter
         if sc.run_importance_filter:
@@ -170,6 +175,7 @@ class FeatureSelector:
             current_features = filter_.get_selected_features()
             self.filters_['importance'] = filter_
             self._log_step('ImportanceFilter', filter_, current_features)
+            self._check_features_remaining(current_features, 'ImportanceFilter')
 
         # 7. Backward Selection (optional)
         if sc.run_backward_selection:
@@ -190,6 +196,7 @@ class FeatureSelector:
             current_features = filter_.get_selected_features()
             self.filters_['backward'] = filter_
             self._log_step('BackwardSelection', filter_, current_features)
+            self._check_features_remaining(current_features, 'BackwardSelection')
 
         # 8. Forward Selection (optional)
         if sc.run_forward_selection:
@@ -210,6 +217,7 @@ class FeatureSelector:
             current_features = filter_.get_selected_features()
             self.filters_['forward'] = filter_
             self._log_step('ForwardSelection', filter_, current_features)
+            self._check_features_remaining(current_features, 'ForwardSelection')
 
         self.selected_features_ = current_features
         self.is_fitted_ = True
@@ -267,6 +275,28 @@ class FeatureSelector:
             f'{name}: removed {n_removed} features, '
             f'{n_remaining} remaining'
         )
+
+    def _check_features_remaining(
+        self,
+        features: list[str],
+        filter_name: str
+    ) -> None:
+        '''
+        Check if any features remain after a filter step.
+
+        Raises NoFeaturesRemainingError if all features were removed.
+        '''
+        if len(features) == 0:
+            message = (
+                f'All features were removed during feature selection. '
+                f'Last filter: {filter_name}. '
+                f'See selection_history_ for details.'
+            )
+            raise NoFeaturesRemainingError(
+                message=message,
+                selection_history=self.selection_history_,
+                last_filter=filter_name
+            )
 
     def get_selected_features(self) -> list[str]:
         'Get list of selected features.'
