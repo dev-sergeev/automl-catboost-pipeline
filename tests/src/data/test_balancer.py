@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from src.config import PipelineConfig
 from src.data.balancer import SampleBalancer
