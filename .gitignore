@@ -110,8 +110,8 @@ artifacts_*/
 *.log
 logs/
 
-# Data files (large)
-data/
+# Data files (large) - only root data folder
+/data/
 *.parquet
 *.csv
 !tests/**/*.csv
